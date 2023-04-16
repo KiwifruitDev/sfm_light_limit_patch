@@ -10,7 +10,7 @@ It allows you to have more than 8 shadowed lights in a scene.
 
 Choose one of the following methods:
 
-- Install from the [Steam Workshop]().
+- Install from the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=2963450977).
 - Clone the GitHub repository into your `SourceFilmmaker/game/` directory and add the folder to your `gameinfo.txt` file.
 - Download the [script](scripts/sfm/mainmenu/KiwifruitDev/Light_Limit_Patch.py) as a raw *.py file and place it into `SourceFilmmaker/game/usermod/scripts/sfm/mainmenu/KiwifruitDev/` (create the folders if they don't exist).
 
