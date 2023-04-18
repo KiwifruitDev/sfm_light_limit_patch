@@ -18,14 +18,15 @@ Choose one of the following methods:
 
 - Launch Source Filmmaker.
 - At the top, click `Scripts` > `KiwifruitDev` > `Light Limit Patch`.
-- Once the dialog pop-up appears, type in the maximum number of shadowed lights you want to have in your scene and click `OK`.
-- A patch will be applied and your new limit will be active.
+- When the dialog appears, enter the desired light limit and your current `-sfm_shadowmapres` value.
+- Please read the warning before clicking `OK`.
+- Once applied, your new limit will be active.
 
 ## Known Issues
 
-In a previous iteration of this patch, using special launch parameters such as `-sfm_shadowmapres 8192` would cause SFM to crash.
+Using high `-sfm_shadowmapres` values such as `8192` can cause SFM to crash with a high amount of lights.
 
-Because this patch is now applied dynamically, this issue may no longer occur.
+This can be mitigated by using a lower `-sfm_shadowmapres` value when increasing the light limit.
 
 Testing is very limited, so if you encounter any issues, please report them on the [issues page](https://github.com/KiwifruitDev/sfm_light_limit_patch).
 

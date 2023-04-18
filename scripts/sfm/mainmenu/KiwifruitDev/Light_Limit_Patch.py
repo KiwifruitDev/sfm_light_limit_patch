@@ -18,6 +18,7 @@
 
 import ctypes
 import struct
+import math
 from PySide import *
 
 try:
@@ -85,7 +86,7 @@ def c_char_buf(l):
     return ctypes.c_char * l
 
 
-def apply_patches(new_light_limit):
+def apply_patches(new_light_limit, flashlight_depth_res = 2048):
     if new_light_limit < 0:
         new_light_limit = 0
 
@@ -106,7 +107,7 @@ def apply_patches(new_light_limit):
         no_permission_mwrite(patch_location, struct.pack('B', new_light_limit - 1))
 
     sfmApp.ExecuteGameCommand('r_flashlightdepthres 1024')  # tricksta, force InitDepthTextureShadows()
-    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres 2048'))  # revert
+    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(flashlight_depth_res))) # revert
 
     log.debug('Patch applied!')
 
@@ -121,13 +122,61 @@ def get_current_light_limit():
 class PatchDialog(QtGui.QDialog):
     def __init__(self):
         super(PatchDialog, self).__init__()
-        # Get light limit value
+        # Set title
+        self.setWindowTitle('Light Limit')
+        # Variables
         light_limit_patch_value = get_current_light_limit()
-        # User input
-        self.light_limit = QtGui.QInputDialog.getInt(self, 'Light Limit', 'Enter a value from 0 to 127 (default: 8)',
-                                                     light_limit_patch_value, 0, 127, 1)
+        self.flashlight_depth_res_value = 2048
+        # Widgets
+        self.form = QtGui.QFormLayout(self)
+        self.light_limit_label = QtGui.QLabel('Enter the new max shadowed light value from 0 to 127:')
+        self.light_limit = QtGui.QSpinBox()
+        self.light_limit.setRange(0, 127)
+        self.light_limit.setValue(light_limit_patch_value)
+        self.light_limit.setSingleStep(1)
+        self.flashlight_depth_res_label = QtGui.QLabel('Enter the current -sfm_shadowmapres value (if present in launch options):')
+        self.flashlight_depth_res = QtGui.QSpinBox()
+        self.flashlight_depth_res.setRange(1, 8192)
+        self.flashlight_depth_res.setValue(2048)
+        self.flashlight_depth_res.setSingleStep(1)
+        self.info1 = QtGui.QLabel('Using high max shadowed light values with high -sfm_shadowmapres values can cause SFM to crash.')
+        self.info2 = QtGui.QLabel('Make sure you save before using! Try using a lower -sfm_shadowmapres value if SFM crashes.')
+        self.info3 = QtGui.QLabel('A sane max shadowed light value is 24, but higher options are available for experimentation.')
+        self.info4 = QtGui.QLabel('Please ensure the -sfm_shadowmapres value is correct, as otherwise SFM will run very slowly.')
+        self.buttons = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel, QtCore.Qt.Horizontal, self)
+        # Add widgets
+        self.form.addRow(self.light_limit_label, self.light_limit)
+        self.form.addRow(self.flashlight_depth_res_label, self.flashlight_depth_res)
+        self.form.addRow(QtGui.QLabel(''))
+        self.form.addRow(self.info1)
+        self.form.addRow(self.info2)
+        self.form.addRow(self.info3)
+        self.form.addRow(QtGui.QLabel(''))
+        self.form.addRow(self.info4)
+        self.form.addRow(QtGui.QLabel(''))
+        self.form.addRow(self.buttons)
+        # Connect
+        self.flashlight_depth_res.valueChanged.connect(self.flashlight_depth_res_changed)
+        self.buttons.accepted.connect(self.apply)
+        self.buttons.rejected.connect(self.close)
+    def apply(self):
         # Apply patches
-        apply_patches(self.light_limit[0])
+        apply_patches(self.light_limit.value(), self.flashlight_depth_res_value)
+        # Close dialog
+        self.close()
+    def flashlight_depth_res_changed(self, value):
+        # Round up to the nearest power of 2 if value is greater than current
+        if value > self.flashlight_depth_res_value:
+            value = 2 ** (value - 1).bit_length()
+            self.flashlight_depth_res_value = value
+            self.flashlight_depth_res.setValue(value)
+        # Round down to the nearest power of 2 if value is less than current
+        elif value < self.flashlight_depth_res_value:
+            round = 2 ** (value - 1).bit_length()
+            if round > value:
+                round /= 2
+            self.flashlight_depth_res_value = round
+            self.flashlight_depth_res.setValue(round)
 
 
-PatchDialog().show()
+PatchDialog().exec_()
