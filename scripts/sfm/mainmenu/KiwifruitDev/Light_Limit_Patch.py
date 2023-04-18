@@ -17,11 +17,8 @@
 # Enjoy!
 
 import ctypes
-import traceback
-import sys
 import struct
 from PySide import *
-from PySide import shiboken
 
 try:
     sfm
@@ -38,6 +35,7 @@ class Log():
     def debug(msg):
         if debug:
             sfm.Msg('[Python] [DEBUG] ' + str(msg) + '\n')
+
 
 debug = True
 log = Log()
@@ -69,6 +67,13 @@ def mwrite(addr, data):
     write_process_memory(get_current_process(), addr, get_addr(patch), bytes_to_write, ctypes.byref(bytes_written))
 
 
+def no_permission_mwrite(addr, data):
+    old_protect = ctypes.c_ulong()
+    virtual_protect(addr, len(data), 0x40, ctypes.byref(old_protect))
+    mwrite(addr, data)
+    virtual_protect(addr, len(data), old_protect, ctypes.byref(old_protect))
+
+
 def get_addr(obj):
     if type(obj) == ctypes.c_char_p:
         return ctypes.c_void_p.from_buffer(obj).value
@@ -83,40 +88,31 @@ def c_char_buf(l):
 def apply_patches(new_light_limit):
     if new_light_limit < 0:
         new_light_limit = 0
-    
+
     if new_light_limit > 127:
         new_light_limit = 127
 
     log.info('Applying patches...')
-    
-    baseifm = ctypes.windll.ifm._handle + 0xC00 # game/bin/tools/ifm.dll
-    baseclient = ctypes.windll.client._handle + 0xC00 # game/tf/bin/client.dll
-    ifm_patch_locations = [ baseifm + 0x27BE2E, baseifm + 0x27BEA1, baseifm + 0x27BEA5 ]
-    client_patch_locations = [ baseclient + 0xB21E3, baseclient + 0xC214A ]
+
+    baseifm = ctypes.windll.ifm._handle + 0xC00  # game/bin/tools/ifm.dll
+    baseclient = ctypes.windll.client._handle + 0xC00  # game/tf/bin/client.dll
+    ifm_patch_locations = [baseifm + 0x27BE2E, baseifm + 0x27BEA1, baseifm + 0x27BEA5]
+    client_patch_locations = [baseclient + 0xB21E3, baseclient + 0xC214A]
 
     for patch_location in ifm_patch_locations:
-        # Disable write protection
-        old_protect = ctypes.c_ulong()
-        virtual_protect(patch_location, 1, 0x40, ctypes.byref(old_protect))
-        # Write patch
-        mwrite(patch_location, struct.pack('B', new_light_limit))
-        # Restore write protection
-        virtual_protect(patch_location, 1, old_protect, ctypes.byref(old_protect))
-    
+        no_permission_mwrite(patch_location, struct.pack('B', new_light_limit))
+
     for patch_location in client_patch_locations:
-        # Disable write protection
-        old_protect = ctypes.c_ulong()
-        virtual_protect(patch_location, 1, 0x40, ctypes.byref(old_protect))
-        # Write patch
-        mwrite(patch_location, struct.pack('B', new_light_limit - 1))
-        # Restore write protection
-        virtual_protect(patch_location, 1, old_protect, ctypes.byref(old_protect))
+        no_permission_mwrite(patch_location, struct.pack('B', new_light_limit - 1))
+
+    sfmApp.ExecuteGameCommand('r_flashlightdepthres 1024')  # tricksta, force InitDepthTextureShadows()
+    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres 2048'))  # revert
 
     log.debug('Patch applied!')
 
 
 def get_current_light_limit():
-    baseifm = ctypes.windll.ifm._handle + 0xC00 # game/bin/tools/ifm.dll
+    baseifm = ctypes.windll.ifm._handle + 0xC00  # game/bin/tools/ifm.dll
     find_address = baseifm + 0x27BE2E
     light_limit = mread(find_address, 1)
     return struct.unpack('B', light_limit)[0]
@@ -128,7 +124,8 @@ class PatchDialog(QtGui.QDialog):
         # Get light limit value
         light_limit_patch_value = get_current_light_limit()
         # User input
-        self.light_limit = QtGui.QInputDialog.getInt(self, 'Light Limit', 'Enter a value from 0 to 127 (default: 8)', light_limit_patch_value, 0, 127, 1)
+        self.light_limit = QtGui.QInputDialog.getInt(self, 'Light Limit', 'Enter a value from 0 to 127 (default: 8)',
+                                                     light_limit_patch_value, 0, 127, 1)
         # Apply patches
         apply_patches(self.light_limit[0])
 
