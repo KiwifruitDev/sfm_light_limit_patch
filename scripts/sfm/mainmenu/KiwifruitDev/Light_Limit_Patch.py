@@ -119,6 +119,10 @@ def get_current_light_limit():
     return struct.unpack('B', light_limit)[0]
 
 
+global flashlight_depth_res_value_global
+globals().setdefault('flashlight_depth_res_value_global', 2048)
+
+
 class PatchDialog(QtGui.QDialog):
     def __init__(self):
         super(PatchDialog, self).__init__()
@@ -126,7 +130,9 @@ class PatchDialog(QtGui.QDialog):
         self.setWindowTitle('Light Limit')
         # Variables
         light_limit_patch_value = get_current_light_limit()
-        self.flashlight_depth_res_value = 2048
+        self.flashlight_depth_res_value = globals()['flashlight_depth_res_value_global']
+        if self.flashlight_depth_res_value == 0 or self.flashlight_depth_res_value == None:
+            self.flashlight_depth_res_value = 2048
         # Widgets
         self.form = QtGui.QFormLayout(self)
         self.light_limit_label = QtGui.QLabel('Enter the new max shadowed light value from 0 to 127:')
@@ -137,7 +143,7 @@ class PatchDialog(QtGui.QDialog):
         self.flashlight_depth_res_label = QtGui.QLabel('Enter the current -sfm_shadowmapres value (if present in launch options):')
         self.flashlight_depth_res = QtGui.QSpinBox()
         self.flashlight_depth_res.setRange(1, 8192)
-        self.flashlight_depth_res.setValue(2048)
+        self.flashlight_depth_res.setValue(self.flashlight_depth_res_value)
         self.flashlight_depth_res.setSingleStep(1)
         self.info1 = QtGui.QLabel('Using high max shadowed light values with high -sfm_shadowmapres values can cause SFM to crash.')
         self.info2 = QtGui.QLabel('Make sure you save before using! Try using a lower -sfm_shadowmapres value if SFM crashes.')
@@ -162,6 +168,8 @@ class PatchDialog(QtGui.QDialog):
     def apply(self):
         # Apply patches
         apply_patches(self.light_limit.value(), self.flashlight_depth_res_value)
+        # Set global flashlight_depth_res_value
+        globals()['flashlight_depth_res_value_global'] = self.flashlight_depth_res_value
         # Close dialog
         self.close()
     def flashlight_depth_res_changed(self, value):
