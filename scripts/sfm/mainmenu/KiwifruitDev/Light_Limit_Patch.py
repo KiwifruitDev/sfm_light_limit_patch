@@ -146,10 +146,8 @@ def apply_patches(new_light_limit):
     for patch_location in client_patch_locations:
         no_permission_mwrite(patch_location, struct.pack('B', new_light_limit - 1))
 
-    actual_shadow_res = get_cvar_value('r_flashlightdepthres')
-
     sfmApp.ExecuteGameCommand('r_flashlightdepthres 1024')  # tricksta, force InitDepthTextureShadows()
-    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(actual_shadow_res)))  # revert
+    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(get_cvar_value("r_flashlightdepthreshigh"))))  # revert
 
     log.debug('Patch applied!')
 
@@ -164,12 +162,36 @@ def get_current_light_limit():
 class PatchDialog(QtGui.QDialog):
     def __init__(self):
         super(PatchDialog, self).__init__()
-        # Get light limit value
+        # Set title
+        self.setWindowTitle('Light Limit')
+        # Variables
         light_limit_patch_value = get_current_light_limit()
-        # User input
-        self.light_limit = QtGui.QInputDialog.getInt(self, 'Light Limit', 'Enter a value from 0 to 127 (default: 8)', light_limit_patch_value, 0, 127, 1)
+        # Widgets
+        self.form = QtGui.QFormLayout(self)
+        self.light_limit_label = QtGui.QLabel('Enter the new max shadowed light value from 1 to 127:')
+        self.light_limit = QtGui.QSpinBox()
+        self.light_limit.setRange(1, 127)
+        self.light_limit.setValue(light_limit_patch_value)
+        self.light_limit.setSingleStep(1)
+        self.info1 = QtGui.QLabel('Using high max shadowed light values with high -sfm_shadowmapres values can cause SFM to crash.')
+        self.info2 = QtGui.QLabel('Make sure you save before using! Try using a lower -sfm_shadowmapres value if SFM crashes.')
+        self.info3 = QtGui.QLabel('A sane max shadowed light value is 24, but higher options are available for experimentation.')
+        self.buttons = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel, QtCore.Qt.Horizontal, self)
+        # Add widgets
+        self.form.addRow(self.light_limit_label, self.light_limit)
+        self.form.addRow(self.info1)
+        self.form.addRow(self.info2)
+        self.form.addRow(self.info3)
+        self.form.addRow(QtGui.QLabel(''))
+        self.form.addRow(self.buttons)
+        # Connect
+        self.buttons.accepted.connect(self.apply)
+        self.buttons.rejected.connect(self.close)
+    def apply(self):
         # Apply patches
-        apply_patches(self.light_limit[0])
+        apply_patches(self.light_limit.value())
+        # Close dialog
+        self.close()
 
 
-PatchDialog().show()
+PatchDialog().exec_()
