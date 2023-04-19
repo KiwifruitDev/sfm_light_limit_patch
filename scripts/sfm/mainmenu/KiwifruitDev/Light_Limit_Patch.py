@@ -6,11 +6,12 @@
 #     |_|     \___/   \___/    |_| |_| |_|  \__,_| |_| |_|  \__, |   |___/ |_| |_|  \__,_|  \__,_|  \___/    \_/\_/    \___|  \__,_|   |_| |_|  \__, | |_| |_|  \__| |___/ (_)   | |   |_| |____|  \___/    /_/      |_| |____|  /_/      | |
 #                                                            __/ |                                                                               __/ |                            \_\                                                    /_/ 
 #                                                           |___/                                                                               |___/                                                                                        
-# SFM Light Limit Patch Script by KiwifruitDev - Version 1
+# SFM Light Limit Patch Script by KiwifruitDev
 # This script allows you to change the light limit in SFM.
 # https://github.com/KiwifruitDev/sfm_light_limit_patch
+# https://steamcommunity.com/sharedfiles/filedetails/?id=2963450977
 #
-# Derived from the Directional Scale Controls script by LLIoKoJIad (kumfc/umfc) and Unknown Soldier:
+# Derived from Directional Scale Controls by LLIoKoJIad (kumfc/umfc) and Unknown Soldier:
 # https://github.com/kumfc/sfm-tools
 # https://steamcommunity.com/sharedfiles/filedetails/?id=2942912893
 #
@@ -18,7 +19,6 @@
 
 import ctypes
 import struct
-import math
 from PySide import *
 
 try:
@@ -147,8 +147,13 @@ def apply_patches(new_light_limit):
     for patch_location in client_patch_locations:
         no_permission_mwrite(patch_location, struct.pack('B', new_light_limit - 1))
 
-    sfmApp.ExecuteGameCommand('r_flashlightdepthres 1024')  # tricksta, force InitDepthTextureShadows()
-    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(get_cvar_value("r_flashlightdepthreshigh"))))  # revert
+    shadow_res_high = int(get_cvar_value("r_flashlightdepthreshigh"))
+    shadow_res_low = int(shadow_res_high / 2)
+    if shadow_res_low <= 1: # -sfm_shadowmapres 1
+        shadow_res_low = 2 # just a different value
+
+    sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(shadow_res_low))  # tricksta, force InitDepthTextureShadows()
+    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(shadow_res_high)))  # revert
 
     log.debug('Patch applied!')
 
@@ -158,10 +163,6 @@ def get_current_light_limit():
     find_address = baseifm + 0x27BE2E
     light_limit = mread(find_address, 1)
     return struct.unpack('B', light_limit)[0]
-
-
-global flashlight_depth_res_value_global
-globals().setdefault('flashlight_depth_res_value_global', 2048)
 
 
 class PatchDialog(QtGui.QDialog):
