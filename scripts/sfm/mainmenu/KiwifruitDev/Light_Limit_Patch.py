@@ -168,7 +168,7 @@ class PatchDialog(QtGui.QDialog):
     def __init__(self):
         super(PatchDialog, self).__init__()
         # Set title
-        self.setWindowTitle('Light Limit')
+        self.setWindowTitle('Light Limit Patch')
         # Variables
         light_limit_patch_value = get_current_light_limit()
         # Widgets
