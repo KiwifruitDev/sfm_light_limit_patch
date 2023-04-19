@@ -1,6 +1,6 @@
 # SFM Light Limit Patch
 
-![Light Limit Patch Dialog](https://i.imgur.com/2yj6WpJ.png)
+![Light Limit Patch Dialog](https://i.imgur.com/QxfEVo0.png)
 
 This is a patch for the shadowed light limit in Source Filmmaker.
 
@@ -18,7 +18,7 @@ Choose one of the following methods:
 
 - Launch Source Filmmaker.
 - At the top, click `Scripts` > `KiwifruitDev` > `Light Limit Patch`.
-- When the dialog appears, enter the desired light limit and your current `-sfm_shadowmapres` value.
+- When the dialog appears, enter the desired light limit.
 - Please read the warning before clicking `OK`.
 - Once applied, your new limit will be active.
 
@@ -28,7 +28,7 @@ Using high `-sfm_shadowmapres` values such as `8192` can cause SFM to crash with
 
 This can be mitigated by using a lower `-sfm_shadowmapres` value when increasing the light limit.
 
-Testing is very limited, so if you encounter any issues, please report them on the [issues page](https://github.com/KiwifruitDev/sfm_light_limit_patch).
+Testing is very limited, so if you encounter any issues, please report them on the [issues page](https://github.com/KiwifruitDev/sfm_light_limit_patch/issues).
 
 ## Credits
 
