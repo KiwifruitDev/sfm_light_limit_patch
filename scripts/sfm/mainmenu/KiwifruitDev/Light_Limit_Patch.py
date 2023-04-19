@@ -46,6 +46,8 @@ write_process_memory = ctypes.windll.kernel32.WriteProcessMemory
 get_current_process = ctypes.windll.kernel32.GetCurrentProcess
 virtual_protect = ctypes.windll.kernel32.VirtualProtect
 
+virtual_alloc = ctypes.windll.kernel32.VirtualAlloc
+
 
 def mread(addr, length):
     to = ctypes.create_string_buffer(length)
@@ -85,6 +87,45 @@ def c_char_buf(l):
     return ctypes.c_char * l
 
 
+class ICvar(ctypes.Structure):
+    _fields_ = [
+        ("char_pad", c_char_buf(64)),
+        ("FindVar", ctypes.c_void_p),
+    ]
+
+
+class ConVar(ctypes.Structure):
+    _fields_ = [
+        ("char_pad_01", c_char_buf(12)),
+        ("name", ctypes.c_char_p),
+        ("char_pad_02", c_char_buf(16)),
+        ("default_value", ctypes.c_char_p),
+        ("value", ctypes.c_char_p),
+    ]
+
+
+def thiscall(func, restype, arg_types, this, *args):
+    buf = virtual_alloc(0, 4096, 0x3000, 0x40)
+    code = "\x8b\x4c\x24\x08\x8f\x44\x24\x04\xc3"
+    ctypes.memmove(buf, code, len(code))
+
+    return ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, ctypes.c_void_p, *arg_types)(buf)(func, this, *args)
+
+
+def get_cvar_value(name):
+    interface_ptr = ctypes.c_void_p.from_address(ctypes.windll.vstdlib.CreateInterface('VEngineCvar007'))
+    interface = ICvar.from_address(interface_ptr.value)
+
+    cvar_ptr = thiscall(interface.FindVar, ctypes.c_int, (ctypes.c_char_p,), ctypes.byref(interface_ptr), name)
+
+    if cvar_ptr:
+        cvar_obj = ConVar.from_address(cvar_ptr)
+
+        log.debug('Current value of {} is {}'.format(name, cvar_obj.value))
+
+        return cvar_obj.value
+
+
 def apply_patches(new_light_limit):
     if new_light_limit < 0:
         new_light_limit = 0
@@ -105,8 +146,10 @@ def apply_patches(new_light_limit):
     for patch_location in client_patch_locations:
         no_permission_mwrite(patch_location, struct.pack('B', new_light_limit - 1))
 
+    actual_shadow_res = get_cvar_value('r_flashlightdepthres')
+
     sfmApp.ExecuteGameCommand('r_flashlightdepthres 1024')  # tricksta, force InitDepthTextureShadows()
-    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres 2048'))  # revert
+    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(actual_shadow_res)))  # revert
 
     log.debug('Patch applied!')
 
@@ -124,8 +167,7 @@ class PatchDialog(QtGui.QDialog):
         # Get light limit value
         light_limit_patch_value = get_current_light_limit()
         # User input
-        self.light_limit = QtGui.QInputDialog.getInt(self, 'Light Limit', 'Enter a value from 0 to 127 (default: 8)',
-                                                     light_limit_patch_value, 0, 127, 1)
+        self.light_limit = QtGui.QInputDialog.getInt(self, 'Light Limit', 'Enter a value from 0 to 127 (default: 8)', light_limit_patch_value, 0, 127, 1)
         # Apply patches
         apply_patches(self.light_limit[0])
 
