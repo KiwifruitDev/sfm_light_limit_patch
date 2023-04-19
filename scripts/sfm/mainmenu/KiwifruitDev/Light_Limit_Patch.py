@@ -47,6 +47,8 @@ write_process_memory = ctypes.windll.kernel32.WriteProcessMemory
 get_current_process = ctypes.windll.kernel32.GetCurrentProcess
 virtual_protect = ctypes.windll.kernel32.VirtualProtect
 
+virtual_alloc = ctypes.windll.kernel32.VirtualAlloc
+
 
 def mread(addr, length):
     to = ctypes.create_string_buffer(length)
@@ -86,7 +88,46 @@ def c_char_buf(l):
     return ctypes.c_char * l
 
 
-def apply_patches(new_light_limit, flashlight_depth_res = 2048):
+class ICvar(ctypes.Structure):
+    _fields_ = [
+        ("char_pad", c_char_buf(64)),
+        ("FindVar", ctypes.c_void_p),
+    ]
+
+
+class ConVar(ctypes.Structure):
+    _fields_ = [
+        ("char_pad_01", c_char_buf(12)),
+        ("name", ctypes.c_char_p),
+        ("char_pad_02", c_char_buf(16)),
+        ("default_value", ctypes.c_char_p),
+        ("value", ctypes.c_char_p),
+    ]
+
+
+def thiscall(func, restype, arg_types, this, *args):
+    buf = virtual_alloc(0, 4096, 0x3000, 0x40)
+    code = "\x8b\x4c\x24\x08\x8f\x44\x24\x04\xc3"
+    ctypes.memmove(buf, code, len(code))
+
+    return ctypes.WINFUNCTYPE(restype, ctypes.c_void_p, ctypes.c_void_p, *arg_types)(buf)(func, this, *args)
+
+
+def get_cvar_value(name):
+    interface_ptr = ctypes.c_void_p.from_address(ctypes.windll.vstdlib.CreateInterface('VEngineCvar007'))
+    interface = ICvar.from_address(interface_ptr.value)
+
+    cvar_ptr = thiscall(interface.FindVar, ctypes.c_int, (ctypes.c_char_p,), ctypes.byref(interface_ptr), name)
+
+    if cvar_ptr:
+        cvar_obj = ConVar.from_address(cvar_ptr)
+
+        log.debug('Current value of {} is {}'.format(name, cvar_obj.value))
+
+        return cvar_obj.value
+
+
+def apply_patches(new_light_limit):
     if new_light_limit < 0:
         new_light_limit = 0
 
@@ -107,7 +148,7 @@ def apply_patches(new_light_limit, flashlight_depth_res = 2048):
         no_permission_mwrite(patch_location, struct.pack('B', new_light_limit - 1))
 
     sfmApp.ExecuteGameCommand('r_flashlightdepthres 1024')  # tricksta, force InitDepthTextureShadows()
-    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(flashlight_depth_res))) # revert
+    QtCore.QTimer.singleShot(25, lambda: sfmApp.ExecuteGameCommand('r_flashlightdepthres {}'.format(get_cvar_value("r_flashlightdepthreshigh"))))  # revert
 
     log.debug('Patch applied!')
 
@@ -130,61 +171,32 @@ class PatchDialog(QtGui.QDialog):
         self.setWindowTitle('Light Limit')
         # Variables
         light_limit_patch_value = get_current_light_limit()
-        self.flashlight_depth_res_value = globals()['flashlight_depth_res_value_global']
-        if self.flashlight_depth_res_value == 0 or self.flashlight_depth_res_value == None:
-            self.flashlight_depth_res_value = 2048
         # Widgets
         self.form = QtGui.QFormLayout(self)
-        self.light_limit_label = QtGui.QLabel('Enter the new max shadowed light value from 0 to 127:')
+        self.light_limit_label = QtGui.QLabel('Enter the new max shadowed light value from 1 to 127:')
         self.light_limit = QtGui.QSpinBox()
-        self.light_limit.setRange(0, 127)
+        self.light_limit.setRange(1, 127)
         self.light_limit.setValue(light_limit_patch_value)
         self.light_limit.setSingleStep(1)
-        self.flashlight_depth_res_label = QtGui.QLabel('Enter the current -sfm_shadowmapres value (if present in launch options):')
-        self.flashlight_depth_res = QtGui.QSpinBox()
-        self.flashlight_depth_res.setRange(1, 8192)
-        self.flashlight_depth_res.setValue(self.flashlight_depth_res_value)
-        self.flashlight_depth_res.setSingleStep(1)
         self.info1 = QtGui.QLabel('Using high max shadowed light values with high -sfm_shadowmapres values can cause SFM to crash.')
         self.info2 = QtGui.QLabel('Make sure you save before using! Try using a lower -sfm_shadowmapres value if SFM crashes.')
         self.info3 = QtGui.QLabel('A sane max shadowed light value is 24, but higher options are available for experimentation.')
-        self.info4 = QtGui.QLabel('Please ensure the -sfm_shadowmapres value is correct, as otherwise SFM will run very slowly.')
         self.buttons = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel, QtCore.Qt.Horizontal, self)
         # Add widgets
         self.form.addRow(self.light_limit_label, self.light_limit)
-        self.form.addRow(self.flashlight_depth_res_label, self.flashlight_depth_res)
-        self.form.addRow(QtGui.QLabel(''))
         self.form.addRow(self.info1)
         self.form.addRow(self.info2)
         self.form.addRow(self.info3)
         self.form.addRow(QtGui.QLabel(''))
-        self.form.addRow(self.info4)
-        self.form.addRow(QtGui.QLabel(''))
         self.form.addRow(self.buttons)
         # Connect
-        self.flashlight_depth_res.valueChanged.connect(self.flashlight_depth_res_changed)
         self.buttons.accepted.connect(self.apply)
         self.buttons.rejected.connect(self.close)
     def apply(self):
         # Apply patches
-        apply_patches(self.light_limit.value(), self.flashlight_depth_res_value)
-        # Set global flashlight_depth_res_value
-        globals()['flashlight_depth_res_value_global'] = self.flashlight_depth_res_value
+        apply_patches(self.light_limit.value())
         # Close dialog
         self.close()
-    def flashlight_depth_res_changed(self, value):
-        # Round up to the nearest power of 2 if value is greater than current
-        if value > self.flashlight_depth_res_value:
-            value = 2 ** (value - 1).bit_length()
-            self.flashlight_depth_res_value = value
-            self.flashlight_depth_res.setValue(value)
-        # Round down to the nearest power of 2 if value is less than current
-        elif value < self.flashlight_depth_res_value:
-            round = 2 ** (value - 1).bit_length()
-            if round > value:
-                round /= 2
-            self.flashlight_depth_res_value = round
-            self.flashlight_depth_res.setValue(round)
 
 
 PatchDialog().exec_()
